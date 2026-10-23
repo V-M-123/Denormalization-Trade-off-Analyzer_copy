@@ -1400,5 +1400,43 @@ body.cursor-mode-magnetic * {
   transform: translateY(-1px);
 }
 
+/* Interactive Option Selection in Competitive Exams */
+.exam-option-item {
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-elevated);
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  user-select: none;
+}
+
+.exam-option-item:hover {
+  border-color: var(--border-hover);
+  background: var(--surface-muted);
+  transform: translateX(3px);
+}
+
+.exam-option-item.selected-correct {
+  border-color: #10b981 !important;
+  background: rgba(16, 185, 129, 0.12) !important;
+}
+
+.exam-option-item.selected-incorrect {
+  border-color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.12) !important;
+}
+
+.exam-option-item.revealed-correct {
+  border-color: #10b981 !important;
+  background: rgba(16, 185, 129, 0.08) !important;
+}
+
+
 
 

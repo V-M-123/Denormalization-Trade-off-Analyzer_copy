@@ -19,7 +19,9 @@ export class CompetitiveExamController {
     this.selectedCategory = 'All';
     this.selectedTopic = 'All';
     this.searchQuery = '';
-    this.allExpanded = true;
+    this.allExpanded = false;
+    this.userSelections = {};
+    this.cardExpanded = {};
     this.container = null;
   }
 
@@ -199,14 +201,15 @@ export class CompetitiveExamController {
     if (toggleAllBtn) {
       toggleAllBtn.addEventListener('click', () => {
         this.allExpanded = !this.allExpanded;
-        const solutions = this.container.querySelectorAll('.exam-solution-body');
-        solutions.forEach(s => {
-          s.style.display = this.allExpanded ? 'block' : 'none';
+        const revealSections = this.container.querySelectorAll('.exam-reveal-section');
+        revealSections.forEach(sec => {
+          sec.style.display = this.allExpanded ? 'block' : 'none';
         });
-        const indicators = this.container.querySelectorAll('.exam-solution-arrow');
-        indicators.forEach(ind => {
-          ind.style.transform = this.allExpanded ? 'rotate(180deg)' : 'rotate(0deg)';
+        const hints = this.container.querySelectorAll('.exam-hint-box');
+        hints.forEach(h => {
+          h.style.display = this.allExpanded ? 'none' : 'flex';
         });
+        toggleAllBtn.textContent = this.allExpanded ? 'Hide All Solutions' : 'Reveal All Solutions';
       });
     }
 
@@ -278,7 +281,9 @@ export class CompetitiveExamController {
         tagBorder = '#8b5cf6';
       }
 
-      const cleanAnswer = (q.correctAnswer || '').trim();
+      const cleanAnswer = (q.correctAnswer || '').trim().replace(/^(option\s*)/i, '').charAt(0).toUpperCase();
+      const userChoice = this.userSelections[q.id];
+      const isRevealed = Boolean(userChoice || this.allExpanded || this.cardExpanded[q.id]);
 
       return `
         <div class="card exam-question-card" data-card-id="${q.id}" style="padding: var(--space-6); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface-card); box-shadow: var(--shadow-sm); transition: transform 0.15s ease, border-color 0.15s ease;">
@@ -311,55 +316,124 @@ export class CompetitiveExamController {
             ${q.question}
           </div>
 
-          <!-- Options (if applicable) -->
+          <!-- Options Section (Clicking any option reveals the solution) -->
           ${q.options && q.options.length > 0 ? `
-            <div style="display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-5);">
-              ${q.options.map((opt) => {
-                const isThisCorrect = opt.startsWith(cleanAnswer) || opt.includes(`(${cleanAnswer})`) || opt.startsWith(`${cleanAnswer})`);
+            <div style="display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-3);">
+              ${q.options.map((opt, optIdx) => {
+                const optLetter = ['A', 'B', 'C', 'D'][optIdx] || (opt.match(/^([A-D])\)/i) ? opt.match(/^([A-D])\)/i)[1].toUpperCase() : 'A');
+                const isCorrect = optLetter === cleanAnswer;
+                const isSelected = userChoice === optLetter;
+
+                let optClass = 'exam-option-item';
+                let badgeText = '';
+
+                if (userChoice) {
+                  if (isSelected && isCorrect) {
+                    optClass += ' selected-correct';
+                    badgeText = '<span style="font-size: 10px; font-weight: 700; color: #10b981; background: rgba(16, 185, 129, 0.15); padding: 2px 8px; border-radius: 4px; text-transform: uppercase;">Your Choice (Correct!)</span>';
+                  } else if (isSelected && !isCorrect) {
+                    optClass += ' selected-incorrect';
+                    badgeText = '<span style="font-size: 10px; font-weight: 700; color: #ef4444; background: rgba(239, 68, 68, 0.15); padding: 2px 8px; border-radius: 4px; text-transform: uppercase;">Your Choice</span>';
+                  } else if (isCorrect) {
+                    optClass += ' revealed-correct';
+                    badgeText = '<span style="font-size: 10px; font-weight: 700; color: #10b981; background: rgba(16, 185, 129, 0.15); padding: 2px 8px; border-radius: 4px; text-transform: uppercase;">Correct Answer</span>';
+                  }
+                }
+
                 return `
-                  <div style="padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); border: 1px solid ${isThisCorrect ? '#10b981' : 'var(--border-subtle)'}; background: ${isThisCorrect ? 'rgba(16, 185, 129, 0.08)' : 'var(--surface-elevated)'}; font-size: 0.9rem; color: var(--text-primary); display: flex; align-items: center; justify-content: space-between;">
-                    <span>${opt}</span>
-                    ${isThisCorrect ? `
-                      <span style="font-size: 10px; font-weight: 700; color: #10b981; background: rgba(16, 185, 129, 0.15); padding: 1px 6px; border-radius: 4px; text-transform: uppercase;">
-                        Correct Answer
+                  <div class="${optClass}" data-card-id="${q.id}" data-opt-letter="${optLetter}">
+                    <div style="display: flex; align-items: flex-start; gap: 10px;">
+                      <span class="exam-opt-letter-circle" style="width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid currentColor; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; margin-top: 1px;">
+                        ${optLetter}
                       </span>
-                    ` : ''}
+                      <span style="line-height: 1.5;">${opt}</span>
+                    </div>
+                    <div class="exam-opt-badge-slot">
+                      ${badgeText}
+                    </div>
                   </div>
                 `;
               }).join('')}
             </div>
           ` : ''}
 
-          <!-- Correct Answer Pill -->
-          <div style="margin-bottom: var(--space-4); display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em;">Correct Answer:</span>
-            <span style="font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: #10b981; background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; padding: 2px 10px; border-radius: 4px;">
-              Option ${cleanAnswer}
-            </span>
+          <!-- Hint Prompt (shown only before selection) -->
+          <div class="exam-hint-box" style="display: ${userChoice ? 'none' : 'flex'}; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); margin-bottom: var(--space-4);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span>Select an option above to check your answer and reveal the correct option and explanation.</span>
           </div>
 
-          <!-- Solution / Step-by-Step Explanation Accordion -->
-          <div class="exam-solution-accordion" style="border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-elevated); overflow: hidden;">
-            <button type="button" class="exam-solution-toggle-btn" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: var(--space-3) var(--space-4); background: var(--surface-muted); border: none; cursor: pointer; text-align: left;">
-              <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                Detailed Step-by-Step Solution &amp; Mathematical Proof
-              </span>
-              <svg class="exam-solution-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted); transition: transform 0.2s ease; transform: ${this.allExpanded ? 'rotate(180deg)' : 'rotate(0deg)'};" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-
-            <div class="exam-solution-body" style="padding: var(--space-4); font-size: 0.875rem; line-height: 1.6; color: var(--text-body); white-space: pre-line; border-top: 1px solid var(--border-subtle); display: ${this.allExpanded ? 'block' : 'none'};">
-              ${q.explanation}
+          <!-- Revealed Section: Correct Option & Full Explanation (revealed after option is selected) -->
+          <div class="exam-reveal-section" style="display: ${isRevealed ? 'block' : 'none'}; margin-top: var(--space-2);">
+            
+            <!-- Verdict Callout -->
+            <div class="exam-verdict-box" style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: var(--radius-sm); margin-bottom: var(--space-3); font-size: 13px; font-weight: 600; ${
+              userChoice === cleanAnswer
+                ? 'background: rgba(16, 185, 129, 0.12); border: 1px solid #10b981; color: #10b981;'
+                : userChoice
+                  ? 'background: rgba(239, 68, 68, 0.12); border: 1px solid #ef4444; color: #ef4444;'
+                  : 'background: rgba(59, 130, 246, 0.12); border: 1px solid #3b82f6; color: #3b82f6;'
+            }">
+              ${userChoice === cleanAnswer ? `
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>Yes, you have correctly answered the question. (Option ${userChoice})</span>
+              ` : userChoice ? `
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span>Yet to answer correctly. You selected Option ${userChoice}. The correct option is Option ${cleanAnswer}.</span>
+              ` : `
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                <span>Solution and correct option revealed:</span>
+              `}
             </div>
+
+            <!-- Revealed Correct Option Pill -->
+            <div class="exam-answer-container" style="margin-bottom: var(--space-3); display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em;">Correct Option:</span>
+              <span style="font-family: var(--font-mono); font-size: 13px; font-weight: 800; color: #10b981; background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; padding: 2px 10px; border-radius: 4px;">
+                Option ${cleanAnswer}
+              </span>
+            </div>
+
+            <!-- Revealed Detailed Explanation Box -->
+            <div class="exam-solution-accordion" style="border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-elevated); overflow: hidden;">
+              <button type="button" class="exam-solution-toggle-btn" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: var(--space-3) var(--space-4); background: var(--surface-muted); border: none; cursor: pointer; text-align: left;">
+                <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  Step-by-Step Solution &amp; Mathematical Proof
+                </span>
+                <svg class="exam-solution-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted); transition: transform 0.2s ease; transform: rotate(180deg);" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+
+              <div class="exam-solution-body" style="padding: var(--space-4); font-size: 0.875rem; line-height: 1.6; color: var(--text-body); white-space: pre-line; border-top: 1px solid var(--border-subtle); display: block;">
+                ${q.explanation}
+              </div>
+            </div>
+
           </div>
 
         </div>
       `;
     }).join('');
 
-    // Attach individual accordion toggles
+    // Attach option click handlers and accordion toggles
     const cards = listContainer.querySelectorAll('.exam-question-card');
     cards.forEach(card => {
+      const qId = card.getAttribute('data-card-id');
+      const questionData = this.filteredQuestions.find(q => q.id === qId);
+      if (!questionData) return;
+
+      const cleanAnswer = (questionData.correctAnswer || '').trim().replace(/^(option\s*)/i, '').charAt(0).toUpperCase();
+
+      // 1. Option Click: Selecting ANY option reveals the correct option & explanation!
+      const optionItems = card.querySelectorAll('.exam-option-item');
+      optionItems.forEach(optItem => {
+        optItem.addEventListener('click', () => {
+          const selectedLetter = optItem.getAttribute('data-opt-letter');
+          this.handleOptionSelection(card, questionData, selectedLetter, cleanAnswer);
+        });
+      });
+
+      // 2. Accordion Toggle
       const toggleBtn = card.querySelector('.exam-solution-toggle-btn');
       const body = card.querySelector('.exam-solution-body');
       const arrow = card.querySelector('.exam-solution-arrow');
@@ -372,6 +446,83 @@ export class CompetitiveExamController {
         });
       }
     });
+  }
+
+  /**
+   * Handle user selecting one of the options:
+   * Immediately updates option highlights, verdict, and reveals the correct option and explanation.
+   */
+  handleOptionSelection(card, q, selectedLetter, cleanAnswer) {
+    this.userSelections[q.id] = selectedLetter;
+
+    const isCorrect = selectedLetter === cleanAnswer;
+
+    // Update all option items on this card
+    const optionItems = card.querySelectorAll('.exam-option-item');
+    optionItems.forEach(item => {
+      const itemLetter = item.getAttribute('data-opt-letter');
+      const badgeSlot = item.querySelector('.exam-opt-badge-slot');
+
+      item.classList.remove('selected-correct', 'selected-incorrect', 'revealed-correct');
+
+      if (itemLetter === cleanAnswer) {
+        if (selectedLetter === cleanAnswer) {
+          item.classList.add('selected-correct');
+          if (badgeSlot) {
+            badgeSlot.innerHTML = '<span style="font-size: 10px; font-weight: 700; color: #10b981; background: rgba(16, 185, 129, 0.15); padding: 2px 8px; border-radius: 4px; text-transform: uppercase;">Your Choice (Correct!)</span>';
+          }
+        } else {
+          item.classList.add('revealed-correct');
+          if (badgeSlot) {
+            badgeSlot.innerHTML = '<span style="font-size: 10px; font-weight: 700; color: #10b981; background: rgba(16, 185, 129, 0.15); padding: 2px 8px; border-radius: 4px; text-transform: uppercase;">Correct Option</span>';
+          }
+        }
+      } else if (itemLetter === selectedLetter) {
+        item.classList.add('selected-incorrect');
+        if (badgeSlot) {
+          badgeSlot.innerHTML = '<span style="font-size: 10px; font-weight: 700; color: #ef4444; background: rgba(239, 68, 68, 0.15); padding: 2px 8px; border-radius: 4px; text-transform: uppercase;">Your Choice</span>';
+        }
+      } else {
+        if (badgeSlot) badgeSlot.innerHTML = '';
+      }
+    });
+
+    // Hide hint prompt
+    const hintBox = card.querySelector('.exam-hint-box');
+    if (hintBox) hintBox.style.display = 'none';
+
+    // Reveal the section containing verdict, correct option, and explanation
+    const revealSection = card.querySelector('.exam-reveal-section');
+    if (revealSection) revealSection.style.display = 'block';
+
+    // Update verdict box
+    const verdictBox = card.querySelector('.exam-verdict-box');
+    if (verdictBox) {
+      if (isCorrect) {
+        verdictBox.style.background = 'rgba(16, 185, 129, 0.12)';
+        verdictBox.style.border = '1px solid #10b981';
+        verdictBox.style.color = '#10b981';
+        verdictBox.innerHTML = `
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>Yes, you have correctly answered the question. (Option ${selectedLetter})</span>
+        `;
+      } else {
+        verdictBox.style.background = 'rgba(239, 68, 68, 0.12)';
+        verdictBox.style.border = '1px solid #ef4444';
+        verdictBox.style.color = '#ef4444';
+        verdictBox.innerHTML = `
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span>Yet to answer correctly. You selected Option ${selectedLetter}. The correct option is Option ${cleanAnswer}.</span>
+        `;
+      }
+    }
+
+    // Ensure solution body is displayed and arrow is rotated
+    const solutionBody = card.querySelector('.exam-solution-body');
+    if (solutionBody) solutionBody.style.display = 'block';
+
+    const solutionArrow = card.querySelector('.exam-solution-arrow');
+    if (solutionArrow) solutionArrow.style.transform = 'rotate(180deg)';
   }
 }
 
